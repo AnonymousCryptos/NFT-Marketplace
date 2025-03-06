@@ -12,6 +12,7 @@ import "../interfaces/ICollection.sol";
 contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
     enum ListingType { FIXED_PRICE, AUCTION }
     enum AuctionStatus { ACTIVE, ENDED, CANCELLED }
+    enum OfferStatus { PENDING, ACCEPTED, REJECTED, CANCELLED }
     struct Listing {
         address seller;
         uint256 price;
@@ -32,6 +33,29 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         address highestBidder;
         AuctionStatus status;
     }
+
+    struct Offer {
+        address buyer;
+        address seller;
+        uint256 price;
+        uint256 quantity;
+        uint256 createTime;
+        OfferStatus status;
+    }
+
+    struct FilterParams {
+        address collection;
+        uint256 tokenId;
+        address user;
+        uint8 filterType;
+    }
+
+    struct BatchPurchaseParams {
+        address collection;
+        uint256 tokenId;
+        address seller;
+        uint256 quantity;
+    }
     
     uint256 public primaryFee;
     uint256 public secondaryFee;
@@ -41,6 +65,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
     IERC20 public immutable designatedToken;
 
     uint256 private _auctionIds;
+    uint256 private _offerIds;
     uint256 public minAuctionDuration;
     uint256 public maxAuctionDuration;
     uint256 public auctionExtensionInterval;
@@ -51,6 +76,14 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
     mapping(uint256 => AuctionDetails) public auctions;
     mapping(uint256 => mapping(address => uint256)) public bids;
     mapping(uint256 => address) public auctionCollections;
+
+    // Offer mappings
+    mapping(address => mapping(uint256 => mapping(uint256 => Offer))) public offers; // collection => tokenId => offerId => Offer
+    mapping(address => uint256[]) private userOfferIds; // buyer => offerIds
+    mapping(uint256 => address) private offerCollections; // offerId => collection
+    mapping(uint256 => uint256) private offerTokenIds; // offerId => tokenId
+    mapping(address => uint256[]) private sellerReceivedOffers; // seller => offerIds
+    mapping(address => mapping(uint256 => uint256[])) private tokenOffers; // collection => tokenId => offerIds
     
     event NFTListed(
         address indexed collection, 
@@ -62,7 +95,13 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         uint256 auctionId
     );
     event NFTSold(address indexed collection, uint256 indexed tokenId, address seller, address buyer, uint256 price, uint256 quantity);
-    event ListingRemoved(address indexed collection, uint256 indexed tokenId, address seller);
+    event ListingRemoved(address indexed collection, uint256 indexed tokenId, address seller, string reason);
+    event ListingQuantityUpdated(
+        address indexed collection,
+        uint256 indexed tokenId,
+        address seller,
+        uint256 newQuantity
+    );
     event AuctionCreated(
         uint256 indexed auctionId,
         address indexed collection,
@@ -94,6 +133,20 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
     event MaxRoyaltyUpdated(uint256 newMaxRoyalty);
     event CollectionRegistered(address indexed collection);
     event AuctionExtensionIntervalUpdated(uint256 newInterval);
+
+    event OfferCreated(
+        uint256 indexed offerId,
+        address indexed collection,
+        uint256 indexed tokenId,
+        address buyer,
+        address seller,
+        uint256 price,
+        uint256 quantity
+    );
+
+    event OfferAccepted(uint256 indexed offerId, address indexed seller);
+    event OfferRejected(uint256 indexed offerId, address indexed seller);
+    event OfferCancelled(uint256 indexed offerId, address indexed buyer);
     
     constructor(
         address _designatedToken,
@@ -150,30 +203,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         emit MaxRoyaltyUpdated(_maxRoyalty);
     }
     
-    function buyNFT(
-        address collection,
-        uint256 tokenId,
-        uint256 quantity
-    ) external nonReentrant {
-        require(registeredCollections[collection], "Collection not registered");
-        ICollection.NFTDetails memory nftDetails = ICollection(collection).nftDetails(tokenId);
-        require(nftDetails.maxSupply > 0, "NFT does not exist");
-        
-        uint256 totalPrice = nftDetails.price * quantity;
-        uint256 platformFee = (totalPrice * primaryFee) / 1000;
-        uint256 creatorFee = (totalPrice * nftDetails.royaltyPercentage) / 1000;
-        uint256 sellerAmount = totalPrice - platformFee - creatorFee;
-        
-        designatedToken.transferFrom(msg.sender, address(this), platformFee);
-        designatedToken.transferFrom(msg.sender, nftDetails.creator, creatorFee);
-        designatedToken.transferFrom(msg.sender, nftDetails.creator, sellerAmount);
-        
-        ICollection(collection).mintNFT(tokenId, quantity);
-        
-        emit NFTSold(collection, tokenId, nftDetails.creator, msg.sender, nftDetails.price, quantity);
-    }
-    
-     function listNFT(
+    function listNFT(
         address collection,
         uint256 tokenId,
         uint256 price,
@@ -218,10 +248,10 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
     function removeListing(
         address collection,
         uint256 tokenId
-    ) external {
+    ) external nonReentrant {
         Listing storage listing = listings[collection][tokenId][msg.sender];
         require(listing.seller == msg.sender && listing.quantity > 0, "No active listing");
-
+        
         if (listing.listingType == ListingType.AUCTION) {
             AuctionDetails storage auction = auctions[listing.auctionId];
             require(auction.status == AuctionStatus.ACTIVE, "Auction not active");
@@ -238,10 +268,9 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
             
             emit AuctionCancelled(listing.auctionId);
         }
-        
+
         delete listings[collection][tokenId][msg.sender];
-        
-        emit ListingRemoved(collection, tokenId, msg.sender);
+        emit ListingRemoved(collection, tokenId, msg.sender, "REMOVED_BY_SELLER");
     }
     
     function buyListedNFT(
@@ -255,10 +284,15 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         require(listing.seller == seller && listing.quantity > 0, "Invalid listing");
         require(listing.listingType == ListingType.FIXED_PRICE, "Not a fixed price listing");
         require(listing.quantity >= quantity, "Insufficient quantity");
-        
-        uint256 totalPrice = listing.price * quantity;
-        uint256 platformFee = (totalPrice * secondaryFee) / 1000;
+
         ICollection.NFTDetails memory nftDetails = ICollection(collection).nftDetails(tokenId);
+        
+        uint256 fee = secondaryFee;
+        if(nftDetails.creator == seller) {
+            fee = primaryFee;
+        }
+        uint256 totalPrice = listing.price * quantity;
+        uint256 platformFee = (totalPrice * fee) / 1000;
         uint256 royaltyFee  = (totalPrice * nftDetails.royaltyPercentage) / 1000;
         uint256 sellerAmount = totalPrice - platformFee - royaltyFee;
         
@@ -271,6 +305,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         listing.quantity -= quantity;
         if (listing.quantity == 0) {
             delete listings[collection][tokenId][seller];
+            emit ListingRemoved(collection, tokenId, seller, "SOLD_OUT");
         }
         
         emit NFTSold(collection, tokenId, seller, msg.sender, listing.price, quantity);
@@ -352,7 +387,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         return listings[collection][tokenId][seller];
     }
 
-     function createAuction(
+    function createAuction(
         address collection,
         uint256 tokenId,
         uint256 quantity,
@@ -538,10 +573,15 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         auction.status = AuctionStatus.ENDED;
         address collection = auctionCollections[auctionId];
         uint256 finalPrice = auction.currentPrice;
+        ICollection.NFTDetails memory nftDetails = ICollection(collection).nftDetails(auction.tokenId);
+
+        uint256 fee = secondaryFee;
+        if(nftDetails.creator == auction.seller) {
+            fee = primaryFee;
+        }
 
         // Calculate fees
-        uint256 platformFee = (finalPrice * secondaryFee) / 1000;
-        ICollection.NFTDetails memory nftDetails = ICollection(collection).nftDetails(auction.tokenId);
+        uint256 platformFee = (finalPrice * fee) / 1000;
         uint256 royaltyFee = (finalPrice * nftDetails.royaltyPercentage) / 1000;
         uint256 sellerAmount = finalPrice - platformFee - royaltyFee;
 
@@ -559,7 +599,9 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         );
 
         // Remove listing
-        delete listings[collection][auction.tokenId][auction.seller];
+        address seller = auction.seller;
+        delete listings[collection][auction.tokenId][seller];
+        emit ListingRemoved(collection, auction.tokenId, seller, "AUCTION_SETTLED");
 
         emit AuctionSettled(auctionId, auction.highestBidder, finalPrice);
     }
@@ -583,9 +625,9 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
 
         // Remove listing
         delete listings[collection][auction.tokenId][auction.seller];
+        emit ListingRemoved(collection, auction.tokenId, auction.seller, "AUCTION_CANCELLED");
 
         emit AuctionCancelled(auctionId);
-        emit ListingRemoved(collection, auction.tokenId, auction.seller);
     }
 
     function setAuctionExtensionInterval(uint256 _interval) external onlyOwner {
@@ -593,4 +635,406 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         auctionExtensionInterval = _interval;
         emit AuctionExtensionIntervalUpdated(_interval);
     }
+
+    function makeOffer(
+        address collection,
+        uint256 tokenId,
+        address seller,
+        uint256 quantity,
+        uint256 price
+    ) external nonReentrant {
+        require(registeredCollections[collection], "Collection not registered");
+        require(quantity > 0, "Invalid quantity");
+        require(price > 0, "Invalid price");
+        require(seller != address(0), "Invalid seller");
+        require(seller != msg.sender, "Cannot make offer to self");
+        
+        uint256 sellerBalance = IERC1155(collection).balanceOf(seller, tokenId);
+        require(sellerBalance >= quantity, "Insufficient seller balance");
+
+        _offerIds++;
+        uint256 offerId = _offerIds;
+
+        offers[collection][tokenId][offerId] = Offer({
+            buyer: msg.sender,
+            seller: seller,
+            price: price,
+            quantity: quantity,
+            createTime: block.timestamp,
+            status: OfferStatus.PENDING
+        });
+
+        userOfferIds[msg.sender].push(offerId);
+        sellerReceivedOffers[seller].push(offerId);
+        tokenOffers[collection][tokenId].push(offerId);
+        offerCollections[offerId] = collection;
+        offerTokenIds[offerId] = tokenId;
+
+        // Pre-approve marketplace for token transfer
+        designatedToken.transferFrom(msg.sender, address(this), price * quantity);
+
+        emit OfferCreated(offerId, collection, tokenId, msg.sender, seller, price, quantity);
+    }
+
+    function acceptOffer(uint256 offerId) external nonReentrant {
+        (address collection, uint256 tokenId, Offer storage offer) = _validateAndGetOffer(offerId);
+        uint256 totalBalance = _validateSellerBalance(collection, tokenId, offer);
+        _validateAndUpdateListing(collection, tokenId, offer.quantity, totalBalance);
+        _processOfferAcceptance(collection, tokenId, offer, offerId);
+    }
+
+    function _validateAndGetOffer(uint256 offerId) private view returns (
+        address collection,
+        uint256 tokenId,
+        Offer storage offer
+    ) {
+        collection = offerCollections[offerId];
+        require(collection != address(0), "Offer does not exist");
+
+        tokenId = offerTokenIds[offerId];
+        offer = offers[collection][tokenId][offerId];
+        
+        require(offer.status == OfferStatus.PENDING, "Invalid offer status");
+        require(msg.sender == offer.seller, "Not offer recipient");
+
+        return (collection, tokenId, offer);
+    }
+
+    function _validateSellerBalance(
+        address collection,
+        uint256 tokenId,
+        Offer memory offer
+    ) private view returns (uint256) {
+        uint256 totalBalance = IERC1155(collection).balanceOf(msg.sender, tokenId);
+        require(totalBalance >= offer.quantity, "Insufficient balance");
+        return totalBalance;
+    }
+
+    function _validateAndUpdateListing(
+        address collection,
+        uint256 tokenId,
+        uint256 offerQuantity,
+        uint256 totalBalance
+    ) private {
+        Listing storage listing = listings[collection][tokenId][msg.sender];
+        
+        // Check if NFT is not in active auction
+        if(listing.listingType == ListingType.AUCTION) {
+            require(
+                auctions[listing.auctionId].status != AuctionStatus.ACTIVE,
+                "Active auction exists"
+            );
+        }
+
+        // Calculate available quantities
+        uint256 listedQuantity = listing.quantity;
+        uint256 unlistedQuantity = totalBalance - listedQuantity;
+        
+        // Calculate how many NFTs to take from unlisted and listed
+        uint256 takeFromUnlisted = unlistedQuantity >= offerQuantity ? 
+            offerQuantity : unlistedQuantity;
+        uint256 takeFromListed = offerQuantity - takeFromUnlisted;
+
+        // Update listing if needed
+        if(takeFromListed > 0) {
+            if(takeFromListed == listedQuantity) {
+                delete listings[collection][tokenId][msg.sender];
+                emit ListingRemoved(collection, tokenId, msg.sender, "ZERO_QUANTITY");
+            } else {
+                listing.quantity = listedQuantity - takeFromListed;
+                emit ListingQuantityUpdated(
+                    collection,
+                    tokenId,
+                    msg.sender,
+                    listing.quantity
+                );
+            }
+        }
+    }
+
+    function _processOfferAcceptance(
+        address collection,
+        uint256 tokenId,
+        Offer storage offer,
+        uint256 offerId
+    ) private {
+        require(
+            IERC1155(collection).isApprovedForAll(msg.sender, address(this)),
+            "Not approved"
+        );
+        ICollection.NFTDetails memory nftDetails = ICollection(collection).nftDetails(tokenId);
+
+        uint256 fee = secondaryFee;
+        if(nftDetails.creator == msg.sender) {
+            fee = primaryFee;
+        }
+
+        // Calculate fees
+        uint256 totalPrice = offer.price * offer.quantity;
+        uint256 platformFee = (totalPrice * fee) / 1000;
+        uint256 royaltyFee = (totalPrice * nftDetails.royaltyPercentage) / 1000;
+        uint256 sellerAmount = totalPrice - platformFee - royaltyFee;
+
+        // Transfer NFT
+        IERC1155(collection).safeTransferFrom(
+            msg.sender,
+            offer.buyer,
+            tokenId,
+            offer.quantity,
+            ""
+        );
+
+        // Distribute payments
+        designatedToken.transfer(nftDetails.creator, royaltyFee);
+        designatedToken.transfer(msg.sender, sellerAmount);
+
+        offer.status = OfferStatus.ACCEPTED;
+        emit OfferAccepted(offerId, msg.sender);
+    }
+
+    function rejectOffer(uint256 offerId) external nonReentrant {
+        address collection = offerCollections[offerId];
+        uint256 tokenId = offerTokenIds[offerId];
+        require(collection != address(0), "Offer does not exist");
+
+        Offer storage offer = offers[collection][tokenId][offerId];
+        require(offer.status == OfferStatus.PENDING, "Invalid offer status");
+        require(
+            IERC1155(collection).balanceOf(msg.sender, tokenId) > 0,
+            "Not token owner"
+        );
+
+        offer.status = OfferStatus.REJECTED;
+
+        // Refund buyer
+        designatedToken.transfer(offer.buyer, offer.price * offer.quantity);
+
+        emit OfferRejected(offerId, msg.sender);
+    }
+
+    function cancelOffer(uint256 offerId) external nonReentrant {
+        address collection = offerCollections[offerId];
+        uint256 tokenId = offerTokenIds[offerId];
+        require(collection != address(0), "Offer does not exist");
+
+        Offer storage offer = offers[collection][tokenId][offerId];
+        require(offer.buyer == msg.sender, "Not offer creator");
+        require(offer.status == OfferStatus.PENDING, "Invalid offer status");
+
+        offer.status = OfferStatus.CANCELLED;
+
+        // Refund buyer
+        designatedToken.transfer(msg.sender, offer.price * offer.quantity);
+
+        emit OfferCancelled(offerId, msg.sender);
+    }
+
+    function getOffersByToken(
+        address collection,
+        uint256 tokenId,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (uint256[] memory offerIdList, uint256 total) {
+        return _getOffersWithFilter(
+            collection,
+            tokenId,
+            address(0), // no user filter
+            offset,
+            limit,
+            0 // filter type: BY_TOKEN
+        );
+    }
+
+    function getOffersToSeller(
+        address seller,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (uint256[] memory offerIdList, uint256 total) {
+        return _getOffersWithFilter(
+            address(0), // no collection filter
+            0, // no tokenId filter
+            seller,
+            offset,
+            limit,
+            1 // filter type: BY_SELLER
+        );
+    }
+
+    function getOffersByBuyer(
+        address buyer,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (uint256[] memory offerIdList, uint256 total) {
+        return _getOffersWithFilter(
+            address(0), // no collection filter
+            0, // no tokenId filter
+            buyer,
+            offset,
+            limit,
+            2 // filter type: BY_BUYER
+        );
+    }
+
+    function _getOffersWithFilter(
+        address collection,
+        uint256 tokenId,
+        address user,
+        uint256 offset,
+        uint256 limit,
+        uint8 filterType
+    ) private view returns (uint256[] memory offerIdList, uint256 total) {
+        FilterParams memory params = FilterParams(collection, tokenId, user, filterType);
+        uint256[] storage sourceOffers = _getSourceOffers(user, filterType, params);
+        
+        // Get total count first
+        uint256 count = _countValidOffers(sourceOffers, params);
+
+        if(count == 0 || offset >= count) {
+            return (new uint256[](0), count);
+        }
+
+        return _getFilteredOffers(sourceOffers, params, offset, limit, count);
+    }
+
+    function _getSourceOffers(address user, uint8 filterType, FilterParams memory params) private view returns (uint256[] storage) {
+        if (filterType == 0) { // BY_TOKEN
+            return tokenOffers[params.collection][params.tokenId];
+        } else if (filterType == 1) { // BY_SELLER
+            return sellerReceivedOffers[user];
+        } else { // BY_BUYER
+            return userOfferIds[user];
+        }
+    }
+
+    function _countValidOffers(
+        uint256[] storage sourceOffers, 
+        FilterParams memory params
+    ) private view returns (uint256) {
+        uint256 count;
+        for(uint256 i = 0; i < sourceOffers.length; i++) {
+            if(_isValidOffer(sourceOffers[i], params)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    function _getFilteredOffers(
+        uint256[] storage sourceOffers,
+        FilterParams memory params,
+        uint256 offset,
+        uint256 limit,
+        uint256 count
+    ) private view returns (uint256[] memory offerIdList, uint256) {
+        uint256 size = count - offset;
+        if(size > limit) {
+            size = limit;
+        }
+
+        offerIdList = new uint256[](size);
+        uint256 currentIndex;
+        uint256 skipped;
+
+        for(uint256 i = 0; i < sourceOffers.length && currentIndex < size; i++) {
+            uint256 offerId = sourceOffers[i];
+            if(_isValidOffer(offerId, params)) {
+                if(skipped < offset) {
+                    skipped++;
+                    continue;
+                }
+                offerIdList[currentIndex++] = offerId;
+            }
+        }
+
+        return (offerIdList, count);
+    }
+
+    function _isValidOffer(
+        uint256 offerId,
+        FilterParams memory params
+    ) private view returns (bool) {
+        address offerCollection = offerCollections[offerId];
+        uint256 offerTokenId = offerTokenIds[offerId];
+        Offer storage offer = offers[offerCollection][offerTokenId][offerId];
+
+        if (params.filterType == 0) { // BY_TOKEN
+            return offerCollection == params.collection && 
+                   offerTokenId == params.tokenId &&
+                   offer.status == OfferStatus.PENDING;
+        } else if (params.filterType == 1) { // BY_SELLER
+            return offer.seller == params.user &&
+                   offer.status == OfferStatus.PENDING;
+        } else { // BY_BUYER
+            return offer.buyer == params.user &&
+                   offer.status == OfferStatus.PENDING;
+        }
+    }
+
+    function getOffer(uint256 offerId) external view returns (
+        address collection,
+        uint256 tokenId,
+        Offer memory offer
+    ) {
+        collection = offerCollections[offerId];
+        require(collection != address(0), "Offer does not exist");
+        
+        tokenId = offerTokenIds[offerId];
+        offer = offers[collection][tokenId][offerId];
+        
+        return (collection, tokenId, offer);
+    }
+
+    function batchBuyListedNFTs(BatchPurchaseParams[] calldata params) external nonReentrant {
+        require(params.length > 0, "Empty batch");
+        
+        for(uint256 i = 0; i < params.length; i++) {
+            BatchPurchaseParams calldata purchase = params[i];
+            require(registeredCollections[purchase.collection], "Collection not registered");
+            
+            Listing storage listing = listings[purchase.collection][purchase.tokenId][purchase.seller];
+            require(listing.seller == purchase.seller && listing.quantity > 0, "Invalid listing");
+            require(listing.listingType == ListingType.FIXED_PRICE, "Not a fixed price listing");
+            require(listing.quantity >= purchase.quantity, "Insufficient quantity");
+
+            ICollection.NFTDetails memory nftDetails = ICollection(purchase.collection).nftDetails(purchase.tokenId);
+            
+            uint256 fee = secondaryFee;
+            if(nftDetails.creator == purchase.seller) {
+                fee = primaryFee;
+            }
+            
+            uint256 totalPrice = listing.price * purchase.quantity;
+            uint256 platformFee = (totalPrice * fee) / 1000;
+            uint256 royaltyFee = (totalPrice * nftDetails.royaltyPercentage) / 1000;
+            uint256 sellerAmount = totalPrice - platformFee - royaltyFee;
+
+            designatedToken.transferFrom(msg.sender, address(this), platformFee);
+            designatedToken.transferFrom(msg.sender, nftDetails.creator, royaltyFee);
+            designatedToken.transferFrom(msg.sender, purchase.seller, sellerAmount);
+
+            IERC1155(purchase.collection).safeTransferFrom(
+                purchase.seller, 
+                msg.sender, 
+                purchase.tokenId, 
+                purchase.quantity, 
+                ""
+            );
+
+            listing.quantity -= purchase.quantity;
+            if (listing.quantity == 0) {
+                delete listings[purchase.collection][purchase.tokenId][purchase.seller];
+                emit ListingRemoved(purchase.collection, purchase.tokenId, purchase.seller, "SOLD_OUT");
+            }
+
+            emit NFTSold(
+                purchase.collection, 
+                purchase.tokenId, 
+                purchase.seller, 
+                msg.sender, 
+                listing.price, 
+                purchase.quantity
+            );
+        }
+    }
 }
+ 

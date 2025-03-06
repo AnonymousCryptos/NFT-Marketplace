@@ -18,11 +18,6 @@ contract BaseCollection is
     
     uint256 private _tokenIds;
     mapping(uint256 => NFTDetails) private _nftDetails;
-    
-    modifier onlyMarketplace() virtual {
-        require(msg.sender == marketplace, "Only marketplace");
-        _;
-    }
 
     function initialize(
         string memory _name,
@@ -49,11 +44,9 @@ contract BaseCollection is
     function createNFT(
         string memory _tokenURI,
         uint256 maxSupply,
-        uint256 price,
         uint256 royaltyPercentage
-    ) external virtual onlyOwner returns (uint256) {
+    ) public virtual override onlyOwner returns (uint256) {
         require(maxSupply > 0, "Invalid max supply");
-        require(price > 0, "Invalid price");
         require(royaltyPercentage <= 1000, "Royalty too high"); // Max 10%
 
         _tokenIds++;
@@ -62,35 +55,15 @@ contract BaseCollection is
         _nftDetails[newTokenId] = NFTDetails({
             uri: _tokenURI,
             maxSupply: maxSupply,
-            currentSupply: 0,
             creator: msg.sender,
-            price: price,
             royaltyPercentage: royaltyPercentage
         });
 
-        emit NFTCreated(newTokenId, msg.sender, maxSupply, price);
+        // Mint all NFTs to creator immediately
+        _mint(msg.sender, newTokenId, maxSupply, "");
+
+        emit NFTCreated(newTokenId, msg.sender, maxSupply);
         return newTokenId;
-    }
-
-    function mintNFT(uint256 tokenId, uint256 quantity) 
-        external 
-        virtual 
-        override
-        nonReentrant
-        onlyMarketplace  
-    {
-        _mintNFT(tokenId, quantity);
-    }
-
-    function _mintNFT(uint256 tokenId, uint256 quantity) internal virtual {
-        NFTDetails storage nft = _nftDetails[tokenId];
-        require(nft.maxSupply > 0, "NFT does not exist");
-        require(nft.currentSupply + quantity <= nft.maxSupply, "Exceeds max supply");
-
-        nft.currentSupply += quantity;
-        _mint(tx.origin, tokenId, quantity, "");
-
-        emit NFTMinted(tokenId, tx.origin, quantity);
     }
 
     function nftDetails(uint256 tokenId) external view virtual returns (NFTDetails memory) {

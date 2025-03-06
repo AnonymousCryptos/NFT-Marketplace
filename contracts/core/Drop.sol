@@ -28,13 +28,13 @@ contract Drop is BaseCollection, IDrop {
         startTime = _startTime;
     }
 
-    function _mintNFT(uint256 tokenId, uint256 quantity) 
-        internal 
-        virtual 
-        override
-    {
+    function createNFT(
+        string memory _tokenURI,
+        uint256 maxSupply,
+        uint256 royaltyPercentage
+    ) public virtual override returns (uint256) {
         require(block.timestamp >= startTime, "Drop not started");
-        super._mintNFT(tokenId, quantity);
+        return super.createNFT(_tokenURI, maxSupply, royaltyPercentage);
     }
 
     function setStartTime(uint256 _startTime) external onlyOwner {

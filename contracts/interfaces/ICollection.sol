@@ -5,14 +5,11 @@ interface ICollection {
     struct NFTDetails {
         string uri;
         uint256 maxSupply;
-        uint256 currentSupply;
         address creator;
-        uint256 price;
         uint256 royaltyPercentage;
     }
 
-    event NFTCreated(uint256 indexed tokenId, address indexed creator, uint256 maxSupply, uint256 price);
-    event NFTMinted(uint256 indexed tokenId, address indexed buyer, uint256 quantity);
+    event NFTCreated(uint256 indexed tokenId, address indexed creator, uint256 maxSupply);
 
     function initialize(
         string memory name,
@@ -22,12 +19,10 @@ interface ICollection {
     ) external;
 
     function createNFT(
-        string memory uri,
+        string memory _tokenURI,
         uint256 maxSupply,
-        uint256 price,
         uint256 royaltyPercentage
     ) external returns (uint256);
 
-    function mintNFT(uint256 tokenId, uint256 quantity) external;
     function nftDetails(uint256 tokenId) external view returns (NFTDetails memory);
 }

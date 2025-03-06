@@ -27,4 +27,29 @@ contract NFTMarketplaceMock is NFTMarketplace {
     function registerCollectionMock(address collection) external {
         registeredCollections[collection] = true;
     }
+
+    function updateListing(address collection, uint256 tokenId, address user) public {
+        listings[collection][tokenId][user] = Listing({
+            seller: user,
+            price: 10,
+            quantity: 1,
+            listingType: ListingType.AUCTION,
+            auctionId: 1
+        });
+    }
+    function updateAuction(uint auctionId) public {
+        auctions[auctionId] = AuctionDetails({
+            seller: msg.sender,
+            startPrice: 1,
+            currentPrice: 1,
+            minBidIncrement: 1,
+            startTime: 100000000,
+            endTime: 12000000000,
+            tokenId: 1,
+            quantity: 1,
+            highestBidder: address(0),
+            status: AuctionStatus.ACTIVE
+        });
+
+    }
 }

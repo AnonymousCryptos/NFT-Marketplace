@@ -28,7 +28,7 @@ contract ReentrantTokenMock is ERC20 {
         
         if(recipient == address(marketplace)) {
             if(reentryFunction == 1) {
-                marketplace.buyNFT(collection, tokenId, 1);
+                // marketplace.buyNFT(collection, tokenId, 1);
             } else if(reentryFunction == 2) {
                 marketplace.placeBid(1, 2 ether);
             } else if(reentryFunction == 3) {
@@ -39,6 +39,19 @@ contract ReentrantTokenMock is ERC20 {
                 marketplace.cancelAuction(1);
             } else if(reentryFunction == 6) {
                 marketplace.createAuction(collection, tokenId, 1, 1 ether, 0.1 ether, 3600);
+            } else if(reentryFunction == 7) {
+                marketplace.makeOffer(collection, tokenId, address(this), 1 ether, 0.1 ether);
+            } else if(reentryFunction == 8) {
+                marketplace.acceptOffer(1);
+            } else if(reentryFunction == 9) {
+                NFTMarketplace.BatchPurchaseParams[] memory params = new NFTMarketplace.BatchPurchaseParams[](1);
+                params[0] = NFTMarketplace.BatchPurchaseParams({
+                    collection:address(this),
+                    tokenId:1,
+                    seller:address(0),
+                    quantity:1
+                });
+                marketplace.batchBuyListedNFTs(params);
             }
         }
         
@@ -60,6 +73,12 @@ contract ReentrantTokenMock is ERC20 {
             marketplace.cancelAuction(1);
         } else if(reentryFunction == 6) {
             marketplace.createAuction(collection, tokenId, 1, 1 ether, 0.1 ether, 3600);
+        } else if(reentryFunction == 8) {
+            marketplace.acceptOffer(1);
+        } else if(reentryFunction == 9) {
+            marketplace.cancelOffer(1);
+        } else if(reentryFunction == 10) {
+            marketplace.rejectOffer(1);
         }
         
         return success;
