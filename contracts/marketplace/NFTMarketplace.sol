@@ -364,12 +364,15 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
         return (_collections, count);
     }
     
-    function withdrawFees() external onlyOwner {
-        uint256 balance = designatedToken.balanceOf(address(this));
-        if (balance > 0) {
-            designatedToken.transfer(owner(), balance);
-        }
-    }
+    /*
+    Need rework, it will send all the tokens to owner, even the tokens locked for auction.
+    */
+    // function withdrawFees() external onlyOwner {
+    //     uint256 balance = designatedToken.balanceOf(address(this));
+    //     if (balance > 0) {
+    //         designatedToken.transfer(owner(), balance);
+    //     }
+    // }
     
     function getListing(
         address collection,
