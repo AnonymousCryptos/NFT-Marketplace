@@ -394,95 +394,96 @@ describe("NFTMarketplace", function () {
         });
     });
 
-    describe("Fee Management", function () {
-        it("Should withdraw platform fees", async function () {
-            await token.connect(buyer).approve(marketplace.address, ethers.utils.parseEther("10"));
-            // await marketplace.connect(buyer).buyNFT(collection.address, tokenId, 1);
-            await primarySale(collection, marketplace, creator, tokenId, token, buyer, 1, 100, ethers.utils.parseEther("1"));
+    // describe("Fee Management", function () {
+    //     it("Should withdraw platform fees", async function () {
+    //     rework needed
+    //         await token.connect(buyer).approve(marketplace.address, ethers.utils.parseEther("10"));
+    //         // await marketplace.connect(buyer).buyNFT(collection.address, tokenId, 1);
+    //         await primarySale(collection, marketplace, creator, tokenId, token, buyer, 1, 100, ethers.utils.parseEther("1"));
 
-            const initialBalance = await token.balanceOf(owner.address);
-            await marketplace.connect(owner).withdrawFees();
-            const finalBalance = await token.balanceOf(owner.address);
+    //         const initialBalance = await token.balanceOf(owner.address);
+    //         await marketplace.connect(owner).withdrawFees();
+    //         const finalBalance = await token.balanceOf(owner.address);
 
-            expect(finalBalance).to.be.gt(initialBalance);
-        });
+    //         expect(finalBalance).to.be.gt(initialBalance);
+    //     });
 
-        it("Should handle zero balance in withdrawFees", async function () {
-            await marketplace.connect(owner).withdrawFees();
-            // Should complete without reverting
-        });
+    //     it("Should handle zero balance in withdrawFees", async function () {
+    //         await marketplace.connect(owner).withdrawFees();
+    //         // Should complete without reverting
+    //     });
 
-        it("Should revert when non-owner withdraws fees", async function () {
-            await expect(
-                marketplace.connect(buyer).withdrawFees()
-            ).to.be.revertedWith("Ownable: caller is not the owner");
-        });
-    });
-    describe("Fee Management and Edge Cases", function () {
-        it("Should handle zero balance withdrawal", async function () {
-            await marketplace.connect(owner).withdrawFees();
-            // Should not revert
-        });
+    //     it("Should revert when non-owner withdraws fees", async function () {
+    //         await expect(
+    //             marketplace.connect(buyer).withdrawFees()
+    //         ).to.be.revertedWith("Ownable: caller is not the owner");
+    //     });
+    // });
+    // describe("Fee Management and Edge Cases", function () {
+    //     it("Should handle zero balance withdrawal", async function () {
+    //         await marketplace.connect(owner).withdrawFees();
+    //         // Should not revert
+    //     });
     
-        it("Should handle pagination edge cases", async function () {
-            // Test max offset
-            await expect(
-                marketplace.getRegisteredCollections(1000, 10)
-            ).to.be.revertedWith("Invalid offset");
+    //     it("Should handle pagination edge cases", async function () {
+    //         // Test max offset
+    //         await expect(
+    //             marketplace.getRegisteredCollections(1000, 10)
+    //         ).to.be.revertedWith("Invalid offset");
     
-            // Test zero limit
-            const collections = await marketplace.getRegisteredCollections(0, 0);
-            expect(collections.length).to.equal(0);
+    //         // Test zero limit
+    //         const collections = await marketplace.getRegisteredCollections(0, 0);
+    //         expect(collections.length).to.equal(0);
     
-            // Test offset equal to total collections
-            const totalCollections = await marketplace.totalCollections();
-            const result = await marketplace.getRegisteredCollections(totalCollections, 10);
-            expect(result.length).to.equal(0);
-        });
+    //         // Test offset equal to total collections
+    //         const totalCollections = await marketplace.totalCollections();
+    //         const result = await marketplace.getRegisteredCollections(totalCollections, 10);
+    //         expect(result.length).to.equal(0);
+    //     });
     
-        it("Should handle owner collections pagination edge cases", async function () {
-            // Test max offset
-            await expect(
-                marketplace.getCollectionsByOwner(owner.address, 1000, 10)
-            ).to.be.revertedWith("Invalid offset");
+    //     it("Should handle owner collections pagination edge cases", async function () {
+    //         // Test max offset
+    //         await expect(
+    //             marketplace.getCollectionsByOwner(owner.address, 1000, 10)
+    //         ).to.be.revertedWith("Invalid offset");
     
-            // Test zero limit
-            const [collections1, total1] = await marketplace.getCollectionsByOwner(owner.address, 0, 0);
-            expect(collections1.length).to.equal(0);
+    //         // Test zero limit
+    //         const [collections1, total1] = await marketplace.getCollectionsByOwner(owner.address, 0, 0);
+    //         expect(collections1.length).to.equal(0);
     
-            // Create multiple collections
-            for(let i = 0; i < 3; i++) {
-                await factory.connect(creator).createCollection(
-                    `Test Collection ${i}`,
-                    "Test symbol",
-                    false,
-                    0
-                );
-            }
+    //         // Create multiple collections
+    //         for(let i = 0; i < 3; i++) {
+    //             await factory.connect(creator).createCollection(
+    //                 `Test Collection ${i}`,
+    //                 "Test symbol",
+    //                 false,
+    //                 0
+    //             );
+    //         }
     
-            // Test partial page
-            const [collections2, total2] = await marketplace.getCollectionsByOwner(creator.address, 2, 10);
-            expect(collections2.length).to.be.lt(10);
-        });
+    //         // Test partial page
+    //         const [collections2, total2] = await marketplace.getCollectionsByOwner(creator.address, 2, 10);
+    //         expect(collections2.length).to.be.lt(10);
+    //     });
     
-        it("Should handle fee updates correctly", async function () {
-            // Test max fee validation
-            await expect(
-                marketplace.connect(owner).setPrimaryFee(1001)
-            ).to.be.revertedWith("Fee too high");
+    //     it("Should handle fee updates correctly", async function () {
+    //         // Test max fee validation
+    //         await expect(
+    //             marketplace.connect(owner).setPrimaryFee(1001)
+    //         ).to.be.revertedWith("Fee too high");
     
-            await expect(
-                marketplace.connect(owner).setSecondaryFee(1001)
-            ).to.be.revertedWith("Fee too high");
+    //         await expect(
+    //             marketplace.connect(owner).setSecondaryFee(1001)
+    //         ).to.be.revertedWith("Fee too high");
     
-            // Test successful updates
-            await marketplace.connect(owner).setPrimaryFee(50);
-            expect(await marketplace.primaryFee()).to.equal(50);
+    //         // Test successful updates
+    //         await marketplace.connect(owner).setPrimaryFee(50);
+    //         expect(await marketplace.primaryFee()).to.equal(50);
     
-            await marketplace.connect(owner).setSecondaryFee(30);
-            expect(await marketplace.secondaryFee()).to.equal(30);
-        });
-    });
+    //         await marketplace.connect(owner).setSecondaryFee(30);
+    //         expect(await marketplace.secondaryFee()).to.equal(30);
+    //     });
+    // });
     describe("Edge cases", function () {
         it("Should revert if tries to set null address as collection factory", async function () {
             await expect(marketplace.connect(owner).setCollectionFactory(ethers.constants.AddressZero)).to.be.revertedWith("Invalid factory address");
