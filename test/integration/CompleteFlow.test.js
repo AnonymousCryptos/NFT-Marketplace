@@ -66,9 +66,9 @@ describe("Complete Flow", function () {
         expect(await collection.balanceOf(buyer.address, tokenId)).to.equal(1);
 
         // Platform fees
-        // const initialOwnerBalance = await token.balanceOf(owner.address);
-        // await marketplace.connect(owner).withdrawFees(); -- rework needed
-        // expect(await token.balanceOf(owner.address)).to.be.gt(initialOwnerBalance);
+        const initialOwnerBalance = await token.balanceOf(owner.address);
+        await marketplace.connect(owner).withdrawFees();
+        expect(await token.balanceOf(owner.address)).to.be.gt(initialOwnerBalance);
     });
 
     it("Should execute complete flow with scheduled drop", async function () {
