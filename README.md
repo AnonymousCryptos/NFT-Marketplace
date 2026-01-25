@@ -37,6 +37,11 @@ npm install
 
 ## Smart Contract Testing
 
+Compile contracts:
+```bash
+npx hardhat compile
+```
+
 Run all tests:
 ```bash
 npx hardhat test
