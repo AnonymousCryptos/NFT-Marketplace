@@ -47,7 +47,7 @@ Run all tests:
 npx hardhat test
 ```
 
-Run specific test file:
+Run specific testcase file:
 ```bash
 npx hardhat test test/unit/BaseCollection.test.js
 ```
@@ -108,7 +108,7 @@ Current gas estimates:
 - Comprehensive access control
 - 100% test coverage
 
-## Contributing
+## For Contribution
 
 1. Fork the repository
 2. Create your feature branch:
