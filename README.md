@@ -27,7 +27,7 @@ A decentralized NFT marketplace built on an EVM-based network that supports ERC1
 1. Clone the repository:
 ```bash
 git clone https://github.com/AnonymousCryptos/NYWNFT-Marketplace.git
-cd nft-marketplace
+cd NYWNFT-Marketplace
 ```
 
 2. Install dependencies:
