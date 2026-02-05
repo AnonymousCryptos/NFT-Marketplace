@@ -10,7 +10,8 @@ contract MockReentrantERC1155 {
     function setReentryFunction(uint256 _function) external {
         reentryFunction = _function;
     }
-    
+
+    // malicious function written for negative test cases only.
     function balanceOf(address account, uint256 id) public returns(uint256){
         if(reentryFunction == 1) {
             NFTMarketplace(marketplace).listNFT(address(this),1,1,1);
