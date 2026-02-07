@@ -204,7 +204,7 @@ NFTMarketplace {
 function initialize(string _name, string _description, address _owner, address _marketplace)
 ```
 - Initializes collection with basic details
-- Sets owner and authorized marketplace
+- Sets the owner and authorized marketplace
 
 ```solidity
 function createNFT(string _tokenURI, uint256 maxSupply, uint256 royaltyPercentage) returns (uint256)
@@ -309,8 +309,8 @@ event OfferCreated(uint256 offerId, /* offer details */)
 3. For drops, set the appropriate start time
 
 ### Trading Flow
-1. Approve the marketplace for NFT transfer
-2. Approve the marketplace for ERC20 transfer
+1. Approve the marketplace for NFT transfer (Seller)
+2. Approve the marketplace for ERC20 transfer (Buyer)
 3. Choose trading method:
    - Fixed price listing
    - Auction
