@@ -1,5 +1,6 @@
 pragma solidity ^0.8.17;
 import "../marketplace/NFTMarketplace.sol";
+// Mock contract to test reentrancy cases, not to be deployed in production
 contract MockReentrantERC1155 {
     address public marketplace;
     uint256 public reentryFunction;
