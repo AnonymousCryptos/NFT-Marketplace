@@ -104,9 +104,9 @@ Current gas estimates:
 ## Security
 
 - Contracts use OpenZeppelin's secure implementations
-- ReentrancyGuard for all value transfer functions
+- ReentrancyGuard for all fund transfer functions
 - Comprehensive access control
-- 100% test coverage
+- 100% test coverage with all positive & negative scenarios
 
 ## For Contribution
 
