@@ -85,7 +85,7 @@ States:
 
 ### 3. Fee Structure
 
-All fees are configurable.
+All fees used in the project are configurable.
 
 #### Platform Fees
 - Primary Sales
