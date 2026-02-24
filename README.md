@@ -26,8 +26,8 @@ A decentralized NFT marketplace built on an EVM-based network and written in Sol
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/AnonymousCryptos/NYWNFT-Marketplace.git
-cd NYWNFT-Marketplace
+git clone https://github.com/AnonymousCryptos/NFT-Marketplace.git
+cd NFT-Marketplace
 ```
 
 2. Install dependencies:
