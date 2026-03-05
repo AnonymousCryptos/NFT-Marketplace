@@ -66,7 +66,7 @@ contract BaseCollection is
             creator: msg.sender
         });
 
-        // Mint all NFTs to creator immediately
+        // Mint all NFTs to the creator immediately after creation
         _mint(msg.sender, newTokenId, maxSupply, "");
 
         emit NFTCreated(_name, _description, newTokenId, msg.sender, maxSupply);
