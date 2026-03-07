@@ -325,4 +325,4 @@ event OfferCreated(uint256 offerId, /* offer details */)
 - Check approval status
 - Verify sufficient balances
 - Handle transaction failures
-- Monitor events for confirmation
+- Monitor events for tx confirmation
