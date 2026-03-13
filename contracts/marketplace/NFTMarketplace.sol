@@ -836,10 +836,10 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
 
         offer.status = OfferStatus.CANCELLED;
 
-        // Refund buyer
+        // Refund the buyer for offer cancellation
         designatedToken.safeTransfer(msg.sender, offer.price * offer.quantity);
 
-        // freeing the locked amount after offer cancellation
+        // Freeing the locked amount after offer cancellation
         amountLockedInPool -= (offer.price * offer.quantity);
 
         emit OfferCancelled(offerId, msg.sender);
