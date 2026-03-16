@@ -123,7 +123,7 @@ git commit -am 'Add some feature.'
 ```bash
 git push origin feature/my-new-feature
 ```
-5. Submit a pull request for review
+5. Submit a pull request for review/approval
 
 
 ## Documentation
