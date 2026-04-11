@@ -85,7 +85,7 @@ describe("Complete Flow", function () {
         const receipt = await tx.wait();
         const event = receipt.events.find(e => e.event === "CollectionCreated");
         const drop = await ethers.getContractAt("Drop", event.args.collection);
-        // Should not be able to create nft before start time.
+        // Should not be able to create NFT before start time.
         await expect(
             drop.connect(creator).createNFT(
                 "Token 1",
@@ -224,14 +224,14 @@ describe("Complete Flow", function () {
         const auctionReceipt = await auctionTx.wait();
         const auctionId = auctionReceipt.events.find(e => e.event === "AuctionCreated").args.auctionId;
 
-        // Place multiple bids
+        // Place the multiple bids
         await token.connect(seller).approve(marketplace.address, ethers.utils.parseEther("10"));
         await marketplace.connect(seller).placeBid(auctionId, ethers.utils.parseEther("1.2"));
 
         await token.connect(owner).approve(marketplace.address, ethers.utils.parseEther("10"));
         await marketplace.connect(owner).placeBid(auctionId, ethers.utils.parseEther("1.5"));
 
-        // Move time close to end
+        // Move time close to the end
         await ethers.provider.send("evm_increaseTime", [3500]); // 100 seconds before end
         await ethers.provider.send("evm_mine");
 
