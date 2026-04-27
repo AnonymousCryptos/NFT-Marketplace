@@ -595,7 +595,7 @@ contract NFTMarketplace is Ownable, ReentrancyGuard, ERC1155Holder {
             ""
         );
 
-        // freeing the locked amount after auctions settled
+        // freeing the locked amount after the auction has settled
         amountLockedInPool -= finalPrice;
 
         // Remove listing
