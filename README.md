@@ -1,6 +1,6 @@
 # NFT Marketplace
 
-A decentralized NFT marketplace built on an EVM-based network and written in the Solidity language that supports NFT creation & time-based drops and trading through auctions, offers, and fixed price sales.
+A decentralized NFT marketplace built on an EVM-based network and written in the Solidity language that supports NFT creation & time-based drops and trading of NFTs through auctions, offers, and fixed price sales.
 
 ![Solidity](https://img.shields.io/badge/solidity-^0.8.17-lightgrey.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
