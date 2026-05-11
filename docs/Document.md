@@ -10,7 +10,7 @@
 
 ## System Overview
 
-This NFT marketplace is a full-featured platform for creating and trading ERC-1155 tokens, supporting multiple trading mechanisms and flexible fee configuration tailored to different needs.
+This NFT marketplace is a full-featured platform for creating and trading ERC-1155 compliant tokens, supporting multiple trading mechanisms and flexible fee configuration tailored to different needs.
 
 ### Supported Standards
 - NFTs: ERC1155 (Multi-token standard)
