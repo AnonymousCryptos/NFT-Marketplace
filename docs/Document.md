@@ -60,7 +60,7 @@ Features:
 - English auction style
 - Configurable duration
 - Minimum bid increments
-- Automatic time extensions
+- Automatic time extensions on the last minute bids
 - Bid refund mechanism
 - Settlement and cancellation options
 
