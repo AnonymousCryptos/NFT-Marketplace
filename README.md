@@ -14,7 +14,7 @@ A decentralized NFT marketplace built on an EVM-based network and written in the
 - 🔨 English Auctions System
 - 💫 Offer System
 - 💸 Configurable Fees & Royalties
-- 📦 Batch Operations
+- 📦 Batching of Operations
 
 ## Prerequisites
 
