@@ -289,7 +289,7 @@ describe("Drop", function () {
                 )
             ).to.be.revertedWith("Invalid name");
     
-            // Test with empty description
+            // Test with empty description value
             await expect(
                 factory.connect(creator).createCollection(
                     "Test Drop",
